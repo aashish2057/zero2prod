@@ -1,13 +1,12 @@
+use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
-use sqlx::{PgConnection, Connection, PgPool, Executor};
-use zero2prod::startup::run;
-use zero2prod::configuration::{get_configuration, DataBaseSettings};
 use uuid::Uuid;
+use zero2prod::configuration::{get_configuration, DataBaseSettings};
+use zero2prod::startup::run;
 pub struct TestApp {
     pub address: String,
     pub pool: PgPool,
 }
-
 
 async fn spawn_app() -> TestApp {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
@@ -17,7 +16,7 @@ async fn spawn_app() -> TestApp {
     let mut configuration = get_configuration().expect("Failed to get configuration");
     configuration.database.database_name = Uuid::new_v4().to_string();
 
-    let connection_pool = configure_database(&configuration.database).await; 
+    let connection_pool = configure_database(&configuration.database).await;
 
     let server = run(listener, connection_pool.clone()).expect("Failed to bind address");
     let _ = tokio::spawn(server);
@@ -26,32 +25,27 @@ async fn spawn_app() -> TestApp {
         address,
         pool: connection_pool,
     }
-
 }
 
 pub async fn configure_database(config: &DataBaseSettings) -> PgPool {
-    let mut connection = PgConnection::connect(
-        &config.connection_string_without_db()
-    )
-    .await
-    .expect("Failed to connect to postgres");
+    let mut connection = PgConnection::connect(&config.connection_string_without_db())
+        .await
+        .expect("Failed to connect to postgres");
 
     connection
         .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
         .await
         .expect("Failed to create database");
 
-    let connection_pool = PgPool::connect(
-        &config.connection_string()
-    )
-    .await
-    .expect("Failed to connect to postgres");
+    let connection_pool = PgPool::connect(&config.connection_string())
+        .await
+        .expect("Failed to connect to postgres");
 
     sqlx::migrate!("./migrations")
         .run(&connection_pool)
         .await
         .expect("Failed to migrate the database");
-    
+
     connection_pool
 }
 
@@ -94,9 +88,9 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     assert_eq!(200, response.status().as_u16());
 
     let saved = sqlx::query!("SELECT email, name FROM subscription",)
-                    .fetch_one(&mut connection)
-                    .await
-                    .expect("Failed to fetch subscriptions");
+        .fetch_one(&mut connection)
+        .await
+        .expect("Failed to fetch subscriptions");
 
     assert_eq!(saved.email, "ursula_le_guin@gmail.com");
     assert_eq!(saved.name, "le guin");
@@ -110,7 +104,7 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     let test_cases = vec![
         ("name=le%20guin", "missing the email"),
         ("email=ursula_le_guin%40gmail.com", "missing the name"),
-        ("", "missing both name and email")
+        ("", "missing both name and email"),
     ];
 
     for (invalid_body, error_message) in test_cases {
@@ -125,15 +119,8 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
         assert_eq!(
             400,
             response.status().as_u16(),
-            "The API did not fail with 400 when payload was {}", 
+            "The API did not fail with 400 when payload was {}",
             error_message
         );
     }
 }
-
-
-
-
-
-
-
